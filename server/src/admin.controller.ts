@@ -1,0 +1,13 @@
+import { Body, Controller, Get, Headers, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
+import { PrismaService } from './prisma.service';
+const auth=(h?:string)=>{if(!process.env.ADMIN_TOKEN || h!==`Bearer ${process.env.ADMIN_TOKEN}`) throw new Error('Unauthorized');};
+@Controller('admin')
+export class AdminController {
+ constructor(private prisma:PrismaService){}
+ @Get('stats') async stats(@Headers('authorization') h?:string){auth(h); const now=new Date(); const day=new Date(now); day.setHours(0,0,0,0); const [orders,users,products,revenueToday,revenueAll]=await Promise.all([this.prisma.order.count(),this.prisma.user.count(),this.prisma.product.count(),this.prisma.order.aggregate({where:{createdAt:{gte:day},status:{not:'CANCELLED'}},_sum:{total:true}}),this.prisma.order.aggregate({where:{status:{not:'CANCELLED'}},_sum:{total:true}})]); return {orders,users,products,revenueToday:revenueToday._sum.total||0,revenueAll:revenueAll._sum.total||0};}
+ @Get('proposals') proposals(@Headers('authorization') h?:string){auth(h);return this.prisma.productProposal.findMany({orderBy:{createdAt:'desc'},include:{worker:true,category:true}})}
+ @Patch('proposals/:id') async review(@Headers('authorization') h:string,@Param('id',ParseIntPipe) id:number,@Body() b:{status:'APPROVED'|'REJECTED';comment?:string}){auth(h); const p=await this.prisma.productProposal.findUnique({where:{id}}); if(!p) throw new Error('Proposal not found'); if(b.status==='APPROVED'){if(p.action==='CREATE'){await this.prisma.product.create({data:{title:p.title,slug:`${p.title.toLowerCase().replace(/\W+/g,'-')}-${Date.now()}`,price:p.price,oldPrice:p.oldPrice,image:p.image,description:p.description,categoryId:p.categoryId}})} else if(p.productId){await this.prisma.product.update({where:{id:p.productId},data:p.action==='DELETE'?{isActive:false}:{title:p.title,price:p.price,oldPrice:p.oldPrice,image:p.image,description:p.description}})}} return this.prisma.productProposal.update({where:{id},data:{status:b.status,adminComment:b.comment,reviewedAt:new Date()}})}
+ @Get('workers') workers(@Headers('authorization') h?:string){auth(h);return this.prisma.worker.findMany({include:{category:true}})}
+ @Post('workers') async addWorker(@Headers('authorization') h:string,@Body() b:{telegramId:string;name:string;categoryId?:number}){auth(h);return this.prisma.worker.create({data:{telegramId:BigInt(b.telegramId),name:b.name,categoryId:b.categoryId}})}
+ @Patch('workers/:id') updateWorker(@Headers('authorization') h:string,@Param('id',ParseIntPipe) id:number,@Body() b:any){auth(h);return this.prisma.worker.update({where:{id},data:{name:b.name,categoryId:b.categoryId,isActive:b.isActive}})}
+}
