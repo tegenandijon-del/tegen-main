@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          Int       @id @default(autoincrement())
+  telegramId  BigInt    @unique
+  firstName   String?
+  lastName    String?
+  username    String?
+  phone       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  orders      Order[]
+  messages    Message[]
+  proposals   ProductProposal[] @relation("WorkerProposals")
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String
+  slug        String    @unique
+  isActive    Boolean   @default(true)
+  products    Product[]
+  proposals   ProductProposal[]
+  workers     Worker[]
+  createdAt   DateTime  @default(now())
+}
+
+model Product {
+  id          Int       @id @default(autoincrement())
+  title       String
+  slug        String      @unique
+  description String?
+  price       Int
+  oldPrice    Int?
+  image       String?
+  isActive    Boolean     @default(true)
+  categoryId  Int
+  category    Category    @relation(fields: [categoryId], references: [id])
+  orderItems  OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Order {
+  id          Int       @id @default(autoincrement())
+  orderNumber String    @unique
+  status      String    @default("NEW")
+  total       Int
+  phone       String?
+  userId      Int
+  user        User      @relation(fields: [userId], references: [id])
+  items       OrderItem[]
+  messages    Message[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  quantity  Int
+  price     Int
+  orderId   Int
+  productId Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Worker {
+  id          Int      @id @default(autoincrement())
+  telegramId  BigInt   @unique
+  name        String
+  categoryId  Int?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model ProductProposal {
+  id           Int      @id @default(autoincrement())
+  workerId     Int
+  worker       User     @relation("WorkerProposals", fields: [workerId], references: [id])
+  categoryId   Int
+  category     Category @relation(fields: [categoryId], references: [id])
+  productId    Int?
+  action       String   @default("CREATE")
+  title        String
+  price        Int
+  oldPrice     Int?
+  image        String?
+  description  String?
+  analysis     String?
+  status       String   @default("PENDING")
+  adminComment String?
+  createdAt    DateTime @default(now())
+  reviewedAt   DateTime?
+}
+
+model Message {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  orderId   Int?
+  order     Order?   @relation(fields: [orderId], references: [id])
+  direction String
+  text      String?
+  fileId    String?
+  fileType  String?
+  createdAt DateTime @default(now())
+}
